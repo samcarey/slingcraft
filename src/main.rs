@@ -12,6 +12,7 @@ fn main() {
             title: "Slingcraft".to_string(),
             canvas: Some("#bevy".to_string()),
             prevent_default_event_handling: false,
+            fit_canvas_to_parent: true,
             ..default()
         }),
         ..default()
