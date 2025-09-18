@@ -10,7 +10,7 @@ fn main() {
 
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
-            title: "Slingcraft".to_string(),
+            title: "SlingCraft".to_string(),
             canvas: Some("#bevy".to_string()),
             prevent_default_event_handling: false,
             fit_canvas_to_parent: true,
@@ -81,7 +81,7 @@ fn ui_system(
     });
 
     egui::CentralPanel::default().show(ctx, |ui| {
-        ui.heading("Slingcraft - Bevy + egui");
+        ui.heading("SlingCraft");
 
         ui.horizontal(|ui| {
             ui.label("Write something: ");
