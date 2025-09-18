@@ -1,2 +1,6 @@
 [build]
 filehash = false
+
+[watch]
+watch = ["src", "assets", "index.html", "Cargo.toml"]
+ignore = ["target"]
