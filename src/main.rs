@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContexts, EguiPlugin};
+use bevy_egui::{egui, EguiContexts, EguiPlugin, EguiPrimaryContextPass};
 
 fn main() {
     let mut app = App::new();
@@ -16,10 +16,10 @@ fn main() {
         }),
         ..default()
     }))
-    .add_plugins(EguiPlugin)
+    .add_plugins(EguiPlugin::default())
     .init_resource::<UiState>()
     .add_systems(Startup, setup)
-    .add_systems(Update, ui_system);
+    .add_systems(EguiPrimaryContextPass, ui_system);
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -56,15 +56,17 @@ fn ui_system(
     #[cfg(not(target_arch = "wasm32"))]
     mut exit: EventWriter<'_, AppExit>,
 ) {
-    let ctx = contexts.ctx_mut();
+    let Ok(ctx) = contexts.ctx_mut() else {
+        return;
+    };
 
     egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-        egui::menu::bar(ui, |ui| {
+        egui::MenuBar::new().ui(ui, |ui| {
             #[cfg(not(target_arch = "wasm32"))]
             {
                 ui.menu_button("File", |ui| {
                     if ui.button("Quit").clicked() {
-                        exit.send(AppExit::Success);
+                        exit.write(AppExit::Success);
                     }
                 });
                 ui.add_space(16.0);
@@ -75,7 +77,7 @@ fn ui_system(
     });
 
     egui::CentralPanel::default().show(ctx, |ui| {
-        ui.heading("Slingcraft - Bevy + egui");
+        ui.heading("Slingcraft - Bevy + egui2");
 
         ui.horizontal(|ui| {
             ui.label("Write something: ");
