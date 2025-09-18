@@ -95,16 +95,5 @@ fn ui_system(
 
         ui.separator();
 
-        ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                ui.label("Powered by ");
-                ui.hyperlink_to("Bevy", "https://bevyengine.org");
-                ui.label(" and ");
-                ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-                ui.label(".");
-            });
-            egui::warn_if_debug_build(ui);
-        });
     });
 }
