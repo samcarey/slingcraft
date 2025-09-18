@@ -81,7 +81,7 @@ fn ui_system(
     });
 
     egui::CentralPanel::default().show(ctx, |ui| {
-        ui.heading("Slingcraft - Bevy + egu");
+        ui.heading("Slingcraft - Bevy + egui");
 
         ui.horizontal(|ui| {
             ui.label("Write something: ");
