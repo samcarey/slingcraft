@@ -3,6 +3,7 @@
 
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts, EguiPlugin, EguiPrimaryContextPass};
+use bevy_simple_subsecond_system::prelude::*;
 
 fn main() {
     let mut app = App::new();
@@ -18,6 +19,7 @@ fn main() {
         ..default()
     }))
     .add_plugins(EguiPlugin::default())
+    .add_plugins(SimpleSubsecondPlugin::default())
     .init_resource::<UiState>()
     .add_systems(Startup, setup)
     .add_systems(EguiPrimaryContextPass, ui_system);
@@ -51,6 +53,7 @@ fn setup(mut commands: Commands<'_, '_>) {
     commands.insert_resource(UiState::new());
 }
 
+#[hot]
 fn ui_system(
     mut contexts: EguiContexts<'_, '_>,
     mut ui_state: ResMut<'_, UiState>,
@@ -78,7 +81,7 @@ fn ui_system(
     });
 
     egui::CentralPanel::default().show(ctx, |ui| {
-        ui.heading("Slingcraft - Bevy + egui2");
+        ui.heading("Slingcraft - Bevy + egu");
 
         ui.horizontal(|ui| {
             ui.label("Write something: ");

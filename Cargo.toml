@@ -22,6 +22,7 @@ bevy = { version = "0.16", default-features = false, features = [
     "png",
 ] }
 bevy_egui = "0.36"
+bevy_simple_subsecond_system = "0.2.0"
 log = "0.4.27"
 serde = { version = "1.0.219", features = ["derive"] }
 
