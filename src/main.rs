@@ -59,34 +59,18 @@ fn setup(mut commands: Commands) {
 }
 
 #[hot]
-fn ui_system(
-    mut contexts: EguiContexts,
-    bodies: Query<&Body>,
-    #[cfg(not(target_arch = "wasm32"))] mut exit: EventWriter<'_, AppExit>,
-) {
+fn ui_system(mut contexts: EguiContexts, bodies: Query<&Body>) {
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
     };
 
     TopBottomPanel::top("top_panel").show(ctx, |ui| {
         MenuBar::new().ui(ui, |ui| {
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                ui.menu_button("File", |ui| {
-                    if ui.button("Quit").clicked() {
-                        exit.write(AppExit::Success);
-                    }
-                });
-                ui.add_space(16.0);
-            }
-
             egui::widgets::global_theme_preference_buttons(ui);
         });
     });
 
     CentralPanel::default().show(ctx, |ui| {
-        ui.heading("SlingCraft");
-
         Plot::new("space_plot")
             .data_aspect(1.)
             .allow_axis_zoom_drag(false)
