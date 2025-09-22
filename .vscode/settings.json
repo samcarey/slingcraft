@@ -1,0 +1,10 @@
+{
+    "rust-analyzer.procMacro.ignored": {
+        "bevy_simple_subsecond_system_macros": [
+            "hot"
+        ]
+    },
+    "rust-analyzer.diagnostics.disabled": [
+        "proc-macro-disabled"
+    ]
+}

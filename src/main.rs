@@ -1,9 +1,15 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::f64::consts::PI;
+
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContexts, EguiPlugin, EguiPrimaryContextPass};
+use bevy_egui::{
+    EguiContexts, EguiPlugin, EguiPrimaryContextPass,
+    egui::{self, CentralPanel, MenuBar, TopBottomPanel},
+};
 use bevy_simple_subsecond_system::prelude::*;
+use egui_plot::Plot;
 
 fn main() {
     let mut app = App::new();
@@ -56,16 +62,15 @@ fn setup(mut commands: Commands<'_, '_>) {
 #[hot]
 fn ui_system(
     mut contexts: EguiContexts<'_, '_>,
-    mut ui_state: ResMut<'_, UiState>,
-    #[cfg(not(target_arch = "wasm32"))]
-    mut exit: EventWriter<'_, AppExit>,
+    _ui_state: ResMut<'_, UiState>,
+    #[cfg(not(target_arch = "wasm32"))] mut exit: EventWriter<'_, AppExit>,
 ) {
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
     };
 
-    egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-        egui::MenuBar::new().ui(ui, |ui| {
+    TopBottomPanel::top("top_panel").show(ctx, |ui| {
+        MenuBar::new().ui(ui, |ui| {
             #[cfg(not(target_arch = "wasm32"))]
             {
                 ui.menu_button("File", |ui| {
@@ -80,20 +85,19 @@ fn ui_system(
         });
     });
 
-    egui::CentralPanel::default().show(ctx, |ui| {
+    CentralPanel::default().show(ctx, |ui| {
         ui.heading("SlingCraft");
 
-        ui.horizontal(|ui| {
-            ui.label("Write something: ");
-            ui.text_edit_singleline(&mut ui_state.label);
+        Plot::new("space_plot").show(ui, |ui| {
+            ui.polygon(egui_plot::Polygon::new(
+                "Gliblot",
+                (0..45)
+                    .into_iter()
+                    .map(|i| i * 8)
+                    .map(|i| i as f64 * PI / 180.)
+                    .map(|d| [d.cos(), d.sin()])
+                    .collect::<Vec<_>>(),
+            ));
         });
-
-        ui.add(egui::Slider::new(&mut ui_state.value, 0.0..=10.0).text("value"));
-        if ui.button("Increment").clicked() {
-            ui_state.value += 1.0;
-        }
-
-        ui.separator();
-
     });
 }
