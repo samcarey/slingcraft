@@ -1,10 +1,11 @@
 use bevy::prelude::*;
 use bevy_egui::{
     EguiContexts, EguiPlugin, EguiPrimaryContextPass,
-    egui::{self, CentralPanel, MenuBar, TopBottomPanel},
+    egui::{self, CentralPanel, Color32, MenuBar, Stroke, TopBottomPanel, vec2},
 };
 use bevy_simple_subsecond_system::prelude::*;
 use egui_plot::Plot;
+use std::f64::consts::PI;
 
 fn main() {
     let mut app = App::new();
@@ -21,7 +22,6 @@ fn main() {
     }))
     .add_plugins(EguiPlugin::default())
     .add_plugins(SimpleSubsecondPlugin::default())
-    .init_resource::<UiState>()
     .add_systems(Startup, setup)
     .add_systems(EguiPrimaryContextPass, ui_system);
 
@@ -34,30 +34,34 @@ fn main() {
     app.run();
 }
 
-#[derive(Resource, Default)]
-struct UiState {
+#[derive(Component)]
+struct Body {
     label: String,
-    value: f32,
+    radius: f64,
+    position: [f64; 2],
+    color: Color32,
 }
 
-impl UiState {
-    fn new() -> Self {
-        Self {
-            label: "Hello World!".to_owned(),
-            value: 2.7,
-        }
-    }
-}
-
-fn setup(mut commands: Commands<'_, '_>) {
+fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
-    commands.insert_resource(UiState::new());
+    commands.spawn(Body {
+        label: "Gliblot".into(),
+        radius: 5.,
+        position: [0., 0.],
+        color: Color32::RED,
+    });
+    commands.spawn(Body {
+        label: "Moon".into(),
+        radius: 2.,
+        position: [20., 20.],
+        color: Color32::BLUE,
+    });
 }
 
 #[hot]
 fn ui_system(
-    mut contexts: EguiContexts<'_, '_>,
-    _ui_state: ResMut<'_, UiState>,
+    mut contexts: EguiContexts,
+    bodies: Query<&Body>,
     #[cfg(not(target_arch = "wasm32"))] mut exit: EventWriter<'_, AppExit>,
 ) {
     let Ok(ctx) = contexts.ctx_mut() else {
@@ -83,16 +87,40 @@ fn ui_system(
     CentralPanel::default().show(ctx, |ui| {
         ui.heading("SlingCraft");
 
-        Plot::new("space_plot").show(ui, |ui| {
-            ui.polygon(egui_plot::Polygon::new(
-                "Gliblot",
-                (0..45)
-                    .into_iter()
-                    .map(|i| i * 8)
-                    .map(|i| i as f64 * PI / 180.)
-                    .map(|d| [d.cos(), d.sin()])
-                    .collect::<Vec<_>>(),
-            ));
-        });
+        Plot::new("space_plot")
+            .data_aspect(1.)
+            .allow_axis_zoom_drag(false)
+            .allow_boxed_zoom(false)
+            .allow_scroll(false)
+            .set_margin_fraction(vec2(0.2, 0.2))
+            .cursor_color(Color32::TRANSPARENT)
+            .show_grid(false)
+            .show_axes(false)
+            .show_x(false)
+            .show_y(false)
+            .show(ui, |ui| {
+                for Body {
+                    label,
+                    radius,
+                    position: [x, y],
+                    color,
+                } in bodies
+                {
+                    ui.polygon(
+                        egui_plot::Polygon::new(
+                            label,
+                            (0..90)
+                                .into_iter()
+                                .map(|i| i * 4)
+                                .map(|i| i as f64 * PI / 180.)
+                                .map(|d| [*radius * d.cos(), *radius * d.sin()])
+                                .map(|[x_edge, y_edge]| [*x + x_edge, *y + y_edge])
+                                .collect::<Vec<_>>(),
+                        )
+                        .fill_color(color.gamma_multiply(0.75))
+                        .stroke(Stroke::new(2., color.gamma_multiply(1.2))),
+                    );
+                }
+            });
     });
 }
