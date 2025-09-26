@@ -2,7 +2,10 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy_egui::{
     EguiContexts, EguiPlugin, EguiPrimaryContextPass,
-    egui::{self, Align2, CentralPanel, Color32, MenuBar, Sense, Stroke, TopBottomPanel, vec2},
+    egui::{
+        self, Align2, CentralPanel, Color32, Frame, MenuBar, RichText, Sense, Stroke,
+        TopBottomPanel, vec2,
+    },
 };
 use bevy_persistent::prelude::*;
 use bevy_persistent_windows::prelude::*;
@@ -100,6 +103,9 @@ struct EguiId(egui::Id);
 #[derive(Resource, Default)]
 struct HoveredBody(Option<String>);
 
+#[derive(Resource, Default)]
+struct SelectedBody(Option<String>);
+
 fn setup(mut commands: Commands) {
     const G: f32 = 50.0; // Same G as used in gravity function
 
@@ -109,6 +115,7 @@ fn setup(mut commands: Commands) {
     commands.insert_resource(TotalEnergy(0.));
     commands.insert_resource(CenterOfMass(Vec3::ZERO));
     commands.insert_resource(HoveredBody::default());
+    commands.insert_resource(SelectedBody::default());
 
     // Central body (stationary)
     let gliblot_pos = Vec3::new(0., 0., 0.);
@@ -218,20 +225,24 @@ fn recalculate_orbital_velocities(mut bodies: Query<(&Transform, &Mass, &mut Vel
     }
 }
 
-fn assign_crafts(mut bodies: Query<(&Mass, &mut Crafts)>) {
-    // Find the maximum mass among all bodies
-    let max_mass = bodies
+fn assign_crafts(mut bodies: Query<(&Radius, &mut Crafts)>) {
+    // Find the maximum surface area among all bodies
+    let max_surface_area = bodies
         .iter()
-        .map(|(mass, _)| mass.0)
-        .fold(0.0_f32, |max, mass| max.max(mass));
+        .map(|(radius, _)| 4.0 * PI * radius.0.powi(2)) // Surface area = 4πr²
+        .fold(0.0_f32, |max, area| max.max(area));
 
-    if max_mass <= 0.0 {
+    if max_surface_area <= 0.0 {
         return;
     }
 
-    // Assign crafts proportionally to mass (0 to 10 range)
-    for (mass, mut crafts) in bodies.iter_mut() {
-        crafts.0 = ((mass.0 / max_mass) * 10.0).round().max(0.0).min(10.0) as u32;
+    // Assign crafts proportionally to surface area (0 to 10 range)
+    for (radius, mut crafts) in bodies.iter_mut() {
+        let surface_area = 4.0 * PI * radius.0.powi(2);
+        crafts.0 = ((surface_area / max_surface_area) * 10.0)
+            .round()
+            .max(0.0)
+            .min(10.0) as u32;
     }
 }
 
@@ -345,16 +356,32 @@ fn calculate_center_of_mass(
 #[hot]
 fn ui_system(
     mut contexts: EguiContexts,
-    bodies: Query<(&Name, &Radius, &Fill, &Transform, &Crafts, Option<&EguiId>)>,
+    bodies: Query<(
+        &Name,
+        &Radius,
+        &Fill,
+        &Transform,
+        &Crafts,
+        &Mass,
+        &Velocity,
+        Option<&EguiId>,
+    )>,
     potential_energy: Res<PotentialEnergy>,
     kinetic_energy: Res<KineticEnergy>,
     total_energy: Res<TotalEnergy>,
     cm: Res<CenterOfMass>,
     mut hovered_body: ResMut<HoveredBody>,
+    mut selected_body: ResMut<SelectedBody>,
+    input: Res<ButtonInput<KeyCode>>,
 ) {
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
     };
+
+    // Handle escape key to deselect
+    if input.just_pressed(KeyCode::Escape) {
+        selected_body.0 = None;
+    }
 
     TopBottomPanel::top("top_panel").show(ctx, |ui| {
         MenuBar::new().ui(ui, |ui| {
@@ -390,6 +417,8 @@ fn ui_system(
                         ..
                     },
                     crafts,
+                    _mass,
+                    _velocity,
                     egui_id,
                 ) in bodies
                 {
@@ -435,14 +464,17 @@ fn ui_system(
                 );
             });
 
-        // Check for hover using geometric detection
+        // Check for hover and click using geometric detection
         let mut new_hovered_body: Option<String> = None;
+        let mut clicked_body: Option<String> = None;
 
         if let Some(pointer_pos) = plot_response.response.hover_pos() {
             // Convert screen coordinates to plot coordinates
             let plot_pos = plot_response.transform.value_from_position(pointer_pos);
             // Check which body (if any) the pointer is over
-            for (name, radius, _fill, transform, _crafts, _egui_id) in bodies.iter() {
+            for (name, radius, _fill, transform, _crafts, _mass, _velocity, _egui_id) in
+                bodies.iter()
+            {
                 let body_center = [
                     transform.translation.x as f64,
                     transform.translation.y as f64,
@@ -453,9 +485,21 @@ fn ui_system(
 
                 if distance <= radius.0 as f64 {
                     new_hovered_body = Some(name.to_string());
+
+                    // Check for click on this body
+                    if plot_response.response.clicked() {
+                        clicked_body = Some(name.to_string());
+                    }
                     break; // Take the first body we find (in case of overlap)
                 }
             }
+        }
+
+        // Handle body selection
+        if let Some(ref clicked_name) = clicked_body {
+            selected_body.0 = Some(clicked_name.clone());
+        } else if plot_response.response.clicked() {
+            // Clicked somewhere else in plot, but we'll check if it's in the card below
         }
 
         // Update hover state for next frame
@@ -464,15 +508,15 @@ fn ui_system(
         // Draw hover outline in overlay if a body is hovered
         if let Some(hovered_name) = &hovered_body.0 {
             // Find the hovered body to get its position and radius
-            if let Some((_, radius, _, transform, _, _)) = bodies
+            if let Some((_, radius, _, transform, _, _, _, _)) = bodies
                 .iter()
-                .find(|(name, _, _, _, _, _)| &name.to_string() == hovered_name)
+                .find(|(name, _, _, _, _, _, _, _)| &name.to_string() == hovered_name)
             {
                 let body_center = [
                     transform.translation.x as f64,
                     transform.translation.y as f64,
                 ];
-                let hover_radius = radius.0 as f64 + 0.5; // Just slightly larger
+                let hover_radius = radius.0 as f64; // Just slightly larger
 
                 // Convert body center from plot coordinates to screen coordinates
                 let center_screen =
@@ -494,38 +538,103 @@ fn ui_system(
                 painter.circle_stroke(
                     center_screen,
                     screen_radius,
-                    Stroke::new(3.0, Color32::WHITE),
+                    Stroke::new(1.0, Color32::WHITE),
                 );
             }
         }
 
-        // Add overlay card in lower left corner with margins
-        let margin = 8.0;
+        // Add overlay card in lower left corner with fixed size
+        let card_width = 250.0;
 
-        // Create a smaller rect with margins
-        let card_rect = plot_response.response.rect.shrink(margin);
+        // Create a fixed-size rect in the lower left corner
+        let card_rect = plot_response.response.rect.shrink(8.);
         let card_rect = card_rect
-            .with_max_x(card_rect.right() + 600.)
-            .with_min_y(card_rect.bottom() - 600.);
+            .with_max_x(card_rect.left() + card_width)
+            .with_min_y(card_rect.bottom() - plot_response.response.rect.height() * 0.4);
 
         let mut ui = ui.new_child(egui::UiBuilder::new().max_rect(card_rect));
-        ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-            let hovered_name = hovered_body.0.clone();
-
-            // Show card with hovered body name or default text
-            egui::Frame::new()
+        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+            let frame_response = egui::Frame::new()
                 .fill(Color32::from_black_alpha(200))
                 .corner_radius(8.0)
                 .stroke(ui.style().visuals.window_stroke())
                 .inner_margin(egui::Margin::same(12))
                 .show(ui, |ui| {
                     ui.visuals_mut().override_text_color = Some(Color32::WHITE);
-                    if let Some(name) = hovered_name {
-                        ui.label(format!("Hovered: {}", name));
+
+                    if let Some(selected_name) = &selected_body.0 {
+                        // Show detailed info for selected body
+                        if let Some((name, radius, fill, transform, crafts, mass, velocity, _)) =
+                            bodies
+                                .iter()
+                                .find(|(n, _, _, _, _, _, _, _)| &n.to_string() == selected_name)
+                        {
+                            ui.heading(RichText::new(name.to_string()).color(fill.0));
+                            Frame::new()
+                                .stroke(ui.style().visuals.window_stroke())
+                                .corner_radius(3.)
+                                .inner_margin(5.)
+                                .fill(ui.style().visuals.code_bg_color.gamma_multiply(0.3))
+                                .show(ui, |ui| {
+                                    ui.label(format!("Radius: {:.1}", radius.0));
+                                    ui.label(format!("Mass: {:.3}", mass.0));
+                                    ui.label(format!("Speed: {:.2}", velocity.0.length()));
+                                    let ke = 0.5 * mass.0 * velocity.0.length_squared();
+                                    ui.label(format!("Kinetic Energy: {:.3}", ke));
+                                });
+                        }
                     } else {
-                        ui.label("SlingCraft v0.1.0\nOrbital Mechanics Simulator");
+                        ui.heading("Bodies");
+                        Frame::new()
+                            .stroke(ui.style().visuals.window_stroke())
+                            .corner_radius(3.)
+                            .inner_margin(5.)
+                            .fill(ui.style().visuals.code_bg_color.gamma_multiply(0.3))
+                            .show(ui, |ui| {
+                                egui::ScrollArea::vertical()
+                                    .auto_shrink(false)
+                                    .show(ui, |ui| {
+                                        for (
+                                            name,
+                                            _radius,
+                                            fill,
+                                            _transform,
+                                            _crafts,
+                                            _mass,
+                                            _velocity,
+                                            _,
+                                        ) in bodies.iter()
+                                        {
+                                            ui.horizontal(|ui| {
+                                                // Color indicator
+                                                let (r, g, b, a) = fill.0.to_tuple();
+                                                let color_response = ui.colored_label(
+                                                    Color32::from_rgba_unmultiplied(r, g, b, a),
+                                                    "⏺",
+                                                );
+                                                let name_response =
+                                                    ui.selectable_label(false, &name.to_string());
+
+                                                // Handle clicks on legend items
+                                                if color_response.clicked()
+                                                    || name_response.clicked()
+                                                {
+                                                    selected_body.0 = Some(name.to_string());
+                                                }
+                                            });
+                                        }
+                                    });
+                            });
                     }
                 });
+
+            // Handle click outside to deselect
+            if plot_response.response.clicked()
+                && !frame_response.response.hovered()
+                && clicked_body.is_none()
+            {
+                selected_body.0 = None;
+            }
         });
     });
 }
