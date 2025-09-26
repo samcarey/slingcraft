@@ -15,7 +15,7 @@ fn main() {
 
     app.add_plugins((
         DefaultPlugins.set(WindowPlugin {
-            primary_window: None, // Disable default primary window
+            primary_window: None,
             ..default()
         }),
         EguiPlugin::default(),
@@ -26,7 +26,7 @@ fn main() {
     .add_systems(EguiPrimaryContextPass, ui_system)
     .add_systems(
         Update,
-        (gravity, motion, (regulate_energy, calculate_center_of_mass)).chain(),
+        (gravity, motion, regulate_energy, calculate_center_of_mass),
     );
 
     #[cfg(target_arch = "wasm32")]
