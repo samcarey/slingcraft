@@ -2,12 +2,12 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy_egui::{
     EguiContexts, EguiPlugin, EguiPrimaryContextPass,
-    egui::{self, CentralPanel, Color32, MenuBar, Sense, Stroke, TopBottomPanel, vec2},
+    egui::{self, CentralPanel, Color32, MenuBar, Stroke, TopBottomPanel, vec2},
 };
 use bevy_persistent::prelude::*;
 use bevy_persistent_windows::prelude::*;
 use bevy_simple_subsecond_system::prelude::*;
-use egui_plot::{Plot, PlotPoint};
+use egui_plot::{Legend, Plot};
 use std::f32::consts::PI;
 
 fn main() {
@@ -272,6 +272,7 @@ fn ui_system(
             .show_axes(false)
             .show_x(false)
             .show_y(false)
+            .legend(Legend::default())
             // .sense(Sense::all())
             .show(ui, |ui| {
                 for (
@@ -302,7 +303,7 @@ fn ui_system(
                 }
 
                 ui.points(
-                    egui_plot::Points::new("COM_H", [cm.0.x as f64, cm.0.y as f64])
+                    egui_plot::Points::new("Center Mass", [cm.0.x as f64, cm.0.y as f64])
                         .color(Color32::WHITE)
                         .radius(2.),
                 );
