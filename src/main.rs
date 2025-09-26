@@ -23,7 +23,10 @@ fn main() {
         PersistentWindowsPlugin,
     ))
     .add_systems(Startup, (setup, spawn_persistent_window).chain())
-    .add_systems(PostStartup, assign_crafts)
+    .add_systems(
+        PostStartup,
+        (assign_masses, recalculate_orbital_velocities, assign_crafts).chain(),
+    )
     .add_systems(EguiPrimaryContextPass, ui_system)
     .add_systems(
         Update,
@@ -92,9 +95,11 @@ fn setup(mut commands: Commands) {
 
     // Central body (stationary)
     let gliblot_pos = Vec3::new(0., 0., 0.);
-    let gliblot_mass = 10.;
+    let gliblot_radius = 5.0f32;
+    // Calculate expected mass based on volume (will be recalculated in assign_masses)
+    let gliblot_mass = (4.0 / 3.0) * PI * gliblot_radius.powi(3); // Density = 1.0
     commands.spawn((
-        Radius(5.),
+        Radius(gliblot_radius),
         Name::new("Gliblot"),
         Fill(Color32::RED),
         Transform::from_translation(gliblot_pos),
@@ -105,41 +110,89 @@ fn setup(mut commands: Commands) {
 
     // Orbiting bodies - positions specified, velocities calculated
     let moon_pos = Vec3::new(20., 0., 0.);
-    let moon_mass = 1.;
+    let moon_radius = 2.;
     let moon_distance = (moon_pos - gliblot_pos).length();
     let moon_orbital_speed = (G * gliblot_mass / moon_distance).sqrt();
     let moon_velocity = Vec3::new(0., moon_orbital_speed, 0.); // Tangent to orbit
 
     commands.spawn((
-        Radius(2.),
+        Radius(moon_radius),
         Name::new("Moon"),
         Fill(Color32::BLUE),
         Transform::from_translation(moon_pos),
-        Mass(moon_mass),
+        Mass(0.0), // Will be calculated in assign_masses
         Velocity(moon_velocity),
         Crafts(0),
     ));
 
     let moon2_pos = Vec3::new(0., 40., 0.);
-    let moon2_mass = 0.5;
+    let moon2_radius = 1.;
     let moon2_distance = (moon2_pos - gliblot_pos).length();
     let moon2_orbital_speed = (G * gliblot_mass / moon2_distance).sqrt();
     let moon2_velocity = Vec3::new(-moon2_orbital_speed, 0., 0.); // Tangent to orbit
 
     commands.spawn((
-        Radius(1.),
+        Radius(moon2_radius),
         Name::new("Moon2"),
         Fill(Color32::GREEN),
         Transform::from_translation(moon2_pos),
-        Mass(moon2_mass),
+        Mass(0.0), // Will be calculated in assign_masses
         Velocity(moon2_velocity),
         Crafts(0),
     ));
 }
 
-fn assign_crafts(
-    mut bodies: Query<(&Mass, &mut Crafts)>,
-) {
+fn assign_masses(mut bodies: Query<(&Radius, &mut Mass)>) {
+    // Density constant (arbitrary units, adjust as needed for desired mass distribution)
+    const DENSITY: f32 = 2.0e-2;
+
+    // Mass = density * volume
+    // For a sphere: volume = (4/3) * π * r³
+    for (radius, mut mass) in bodies.iter_mut() {
+        let volume = (4.0 / 3.0) * PI * radius.0.powi(3);
+        mass.0 = DENSITY * volume;
+    }
+}
+
+fn recalculate_orbital_velocities(mut bodies: Query<(&Transform, &Mass, &mut Velocity, &Name)>) {
+    const G: f32 = 50.0; // Same G as used in gravity function
+
+    // Find the central body (Gliblot - the one with the largest mass)
+    let mut central_body: Option<(Vec3, f32)> = None;
+    let mut max_mass = 0.0;
+
+    for (transform, mass, _, _name) in bodies.iter() {
+        if mass.0 > max_mass {
+            max_mass = mass.0;
+            central_body = Some((transform.translation, mass.0));
+        }
+    }
+
+    let Some((central_pos, central_mass)) = central_body else {
+        return;
+    };
+
+    // Set orbital velocities for all bodies except the central one
+    for (transform, mass, mut velocity, _name) in bodies.iter_mut() {
+        if mass.0 == max_mass {
+            // This is the central body, keep it stationary
+            velocity.0 = Vec3::ZERO;
+        } else {
+            // Calculate orbital velocity for this body
+            let direction = transform.translation - central_pos;
+            let distance = direction.length();
+
+            if distance > 0.0 {
+                let orbital_speed = (G * central_mass / distance).sqrt();
+                // Velocity perpendicular to the radius vector
+                let tangent = Vec3::new(-direction.y, direction.x, 0.0).normalize();
+                velocity.0 = tangent * orbital_speed;
+            }
+        }
+    }
+}
+
+fn assign_crafts(mut bodies: Query<(&Mass, &mut Crafts)>) {
     // Find the maximum mass among all bodies
     let max_mass = bodies
         .iter()
