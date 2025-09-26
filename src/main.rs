@@ -7,7 +7,7 @@ use bevy_egui::{
 use bevy_persistent::prelude::*;
 use bevy_persistent_windows::prelude::*;
 use bevy_simple_subsecond_system::prelude::*;
-use egui_plot::Plot;
+use egui_plot::{Plot, PlotPoint};
 use std::f32::consts::PI;
 
 fn main() {
@@ -24,7 +24,10 @@ fn main() {
     ))
     .add_systems(Startup, (setup, spawn_persistent_window))
     .add_systems(EguiPrimaryContextPass, ui_system)
-    .add_systems(Update, (gravity, motion, regulate_energy).chain());
+    .add_systems(
+        Update,
+        (gravity, motion, (regulate_energy, calculate_center_of_mass)).chain(),
+    );
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -81,6 +84,7 @@ fn setup(mut commands: Commands) {
     commands.insert_resource(PotentialEnergy(0.));
     commands.insert_resource(KineticEnergy(0.));
     commands.insert_resource(TotalEnergy(0.));
+    commands.insert_resource(CenterOfMass(Vec3::ZERO));
 
     // Central body (stationary)
     let gliblot_pos = Vec3::new(0., 0., 0.);
@@ -195,6 +199,9 @@ struct KineticEnergy(f32);
 #[derive(Resource, Debug)]
 struct TotalEnergy(f32);
 
+#[derive(Resource, Debug)]
+struct CenterOfMass(Vec3);
+
 #[hot]
 fn regulate_energy(
     bodies: Query<(&mut Velocity, &Mass)>,
@@ -211,6 +218,25 @@ fn regulate_energy(
     total_energy.0 = kinetic_energy.0 + potential_energy.0;
 }
 
+fn calculate_center_of_mass(
+    bodies: Query<(&Transform, &Mass)>,
+    mut center_of_mass: ResMut<CenterOfMass>,
+) {
+    let mut total_mass = 0.0;
+    let mut weighted_position = Vec3::ZERO;
+
+    for (transform, mass) in bodies.iter() {
+        weighted_position += transform.translation * mass.0;
+        total_mass += mass.0;
+    }
+
+    if total_mass > 0.0 {
+        center_of_mass.0 = weighted_position / total_mass;
+    } else {
+        center_of_mass.0 = Vec3::ZERO;
+    }
+}
+
 #[hot]
 fn ui_system(
     mut contexts: EguiContexts,
@@ -218,6 +244,7 @@ fn ui_system(
     potential_energy: Res<PotentialEnergy>,
     kinetic_energy: Res<KineticEnergy>,
     total_energy: Res<TotalEnergy>,
+    cm: Res<CenterOfMass>,
 ) {
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
@@ -245,7 +272,7 @@ fn ui_system(
             .show_axes(false)
             .show_x(false)
             .show_y(false)
-            .sense(Sense::all())
+            // .sense(Sense::all())
             .show(ui, |ui| {
                 for (
                     name,
@@ -273,6 +300,12 @@ fn ui_system(
                         .stroke(Stroke::new(2., fill.0.gamma_multiply(1.2))),
                     );
                 }
+
+                ui.points(
+                    egui_plot::Points::new("COM_H", [cm.0.x as f64, cm.0.y as f64])
+                        .color(Color32::WHITE)
+                        .radius(2.),
+                );
             });
         if plot_response.response.clicked() {
             println!("hi");
