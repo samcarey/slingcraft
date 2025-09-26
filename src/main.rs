@@ -3,8 +3,9 @@ use bevy::window::PrimaryWindow;
 use bevy_egui::{
     EguiContexts, EguiPlugin, EguiPrimaryContextPass,
     egui::{
-        self, Align2, CentralPanel, Color32, Frame, MenuBar, RichText, Sense, Stroke,
-        TopBottomPanel, vec2,
+        self, Align, Align2, CentralPanel, Color32, Frame, InnerResponse, Layout, MenuBar,
+        RichText, Sense, Stroke, TopBottomPanel, Ui, UiBuilder, scroll_area::ScrollAreaOutput,
+        vec2,
     },
 };
 use bevy_persistent::prelude::*;
@@ -543,98 +544,78 @@ fn ui_system(
             }
         }
 
-        // Add overlay card in lower left corner with fixed size
-        let card_width = 250.0;
-
-        // Create a fixed-size rect in the lower left corner
-        let card_rect = plot_response.response.rect.shrink(8.);
-        let card_rect = card_rect
-            .with_max_x(card_rect.left() + card_width)
-            .with_min_y(card_rect.bottom() - plot_response.response.rect.height() * 0.4);
-
-        let mut ui = ui.new_child(egui::UiBuilder::new().max_rect(card_rect));
-        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-            let frame_response = egui::Frame::new()
-                .fill(Color32::from_black_alpha(200))
-                .corner_radius(8.0)
-                .stroke(ui.style().visuals.window_stroke())
-                .inner_margin(egui::Margin::same(12))
-                .show(ui, |ui| {
+        let window_size = [250., plot_response.response.rect.height() * 0.4];
+        let window_response = egui::Window::new("overlay_window")
+            .anchor(Align2::LEFT_BOTTOM, [16.0, -16.0])
+            .min_size(window_size)
+            .max_size(window_size)
+            .title_bar(false)
+            .resizable(false)
+            .frame(
+                Frame::window(&ctx.style())
+                    .fill(ui.style().visuals.window_fill.gamma_multiply(0.8)),
+            )
+            .show(ui.ctx(), |ui| {
+                ui.with_layout(egui::Layout::top_down_justified(Align::Min), |ui| {
                     ui.visuals_mut().override_text_color = Some(Color32::WHITE);
 
                     if let Some(selected_name) = &selected_body.0 {
-                        // Show detailed info for selected body
-                        if let Some((name, radius, fill, transform, crafts, mass, velocity, _)) =
-                            bodies
-                                .iter()
-                                .find(|(n, _, _, _, _, _, _, _)| &n.to_string() == selected_name)
+                        if let Some((name, radius, fill, _, crafts, mass, velocity, _)) = bodies
+                            .iter()
+                            .find(|(n, _, _, _, _, _, _, _)| &n.to_string() == selected_name)
                         {
                             ui.heading(RichText::new(name.to_string()).color(fill.0));
-                            Frame::new()
-                                .stroke(ui.style().visuals.window_stroke())
-                                .corner_radius(3.)
-                                .inner_margin(5.)
-                                .fill(ui.style().visuals.code_bg_color.gamma_multiply(0.3))
-                                .show(ui, |ui| {
-                                    ui.label(format!("Radius: {:.1}", radius.0));
-                                    ui.label(format!("Mass: {:.3}", mass.0));
-                                    ui.label(format!("Speed: {:.2}", velocity.0.length()));
-                                    let ke = 0.5 * mass.0 * velocity.0.length_squared();
-                                    ui.label(format!("Kinetic Energy: {:.3}", ke));
-                                });
+                            framed_list(ui, |ui| {
+                                ui.label(format!("Radius: {:.1}", radius.0));
+                                ui.label(format!("Mass: {:.2}", mass.0));
+                                ui.label(format!("Speed: {:.1}", velocity.0.length()));
+                                let ke = 0.5 * mass.0 * velocity.0.length_squared();
+                                ui.label(format!("Kinetic Energy: {:.1}", ke));
+                            });
                         }
                     } else {
                         ui.heading("Bodies");
-                        Frame::new()
-                            .stroke(ui.style().visuals.window_stroke())
-                            .corner_radius(3.)
-                            .inner_margin(5.)
-                            .fill(ui.style().visuals.code_bg_color.gamma_multiply(0.3))
-                            .show(ui, |ui| {
-                                egui::ScrollArea::vertical()
-                                    .auto_shrink(false)
-                                    .show(ui, |ui| {
-                                        for (
-                                            name,
-                                            _radius,
-                                            fill,
-                                            _transform,
-                                            _crafts,
-                                            _mass,
-                                            _velocity,
-                                            _,
-                                        ) in bodies.iter()
-                                        {
-                                            ui.horizontal(|ui| {
-                                                // Color indicator
-                                                let (r, g, b, a) = fill.0.to_tuple();
-                                                let color_response = ui.colored_label(
-                                                    Color32::from_rgba_unmultiplied(r, g, b, a),
-                                                    "⏺",
-                                                );
-                                                let name_response =
-                                                    ui.selectable_label(false, &name.to_string());
-
-                                                // Handle clicks on legend items
-                                                if color_response.clicked()
-                                                    || name_response.clicked()
-                                                {
-                                                    selected_body.0 = Some(name.to_string());
-                                                }
-                                            });
-                                        }
-                                    });
-                            });
+                        framed_list(ui, |ui| {
+                            for (name, _radius, fill, _transform, _crafts, _mass, _velocity, _) in
+                                bodies.iter()
+                            {
+                                ui.horizontal(|ui| {
+                                    let color_response = ui.colored_label(fill.0, "⏺");
+                                    let name_response =
+                                        ui.selectable_label(false, &name.to_string());
+                                    if color_response.clicked() || name_response.clicked() {
+                                        selected_body.0 = Some(name.to_string());
+                                    }
+                                });
+                            }
+                        });
                     }
                 });
-
-            // Handle click outside to deselect
-            if plot_response.response.clicked()
-                && !frame_response.response.hovered()
-                && clicked_body.is_none()
-            {
-                selected_body.0 = None;
-            }
-        });
+            });
+        // Handle click outside to deselect
+        if plot_response.response.clicked()
+            && !window_response
+                .map(|r| r.response.hovered())
+                .unwrap_or(false)
+            && clicked_body.is_none()
+        {
+            selected_body.0 = None;
+        }
     });
+}
+
+pub fn framed_list<R>(
+    ui: &mut Ui,
+    add_contents: impl FnOnce(&mut Ui) -> R,
+) -> InnerResponse<ScrollAreaOutput<R>> {
+    Frame::new()
+        .stroke(ui.style().visuals.window_stroke())
+        .corner_radius(3.)
+        .inner_margin(5.)
+        .fill(ui.style().visuals.code_bg_color.gamma_multiply(0.3))
+        .show(ui, |ui| {
+            egui::ScrollArea::vertical()
+                .auto_shrink(false)
+                .show(ui, add_contents)
+        })
 }
