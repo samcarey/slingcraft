@@ -79,9 +79,13 @@ struct Velocity(Vec3);
 struct Radius(f32);
 
 #[derive(Component)]
+#[require(Mass, Crafts)]
+struct Body;
+
+#[derive(Component, Default)]
 struct Mass(f32);
 
-#[derive(Component)]
+#[derive(Component, Default)]
 struct Crafts(u32);
 
 fn setup(mut commands: Commands) {
@@ -99,13 +103,13 @@ fn setup(mut commands: Commands) {
     // Calculate expected mass based on volume (will be recalculated in assign_masses)
     let gliblot_mass = (4.0 / 3.0) * PI * gliblot_radius.powi(3); // Density = 1.0
     commands.spawn((
+        Body,
         Radius(gliblot_radius),
         Name::new("Gliblot"),
         Fill(Color32::RED),
         Transform::from_translation(gliblot_pos),
-        Mass(gliblot_mass),
+        Mass(gliblot_mass), // Override default with calculated mass for initial velocities
         Velocity(Vec3::ZERO),
-        Crafts(0),
     ));
 
     // Orbiting bodies - positions specified, velocities calculated
@@ -116,13 +120,13 @@ fn setup(mut commands: Commands) {
     let moon_velocity = Vec3::new(0., moon_orbital_speed, 0.); // Tangent to orbit
 
     commands.spawn((
+        Body,
         Radius(moon_radius),
         Name::new("Moon"),
         Fill(Color32::BLUE),
         Transform::from_translation(moon_pos),
-        Mass(0.0), // Will be calculated in assign_masses
         Velocity(moon_velocity),
-        Crafts(0),
+        // Mass and Crafts will be added with defaults (0.0 and 0)
     ));
 
     let moon2_pos = Vec3::new(0., 40., 0.);
@@ -132,13 +136,13 @@ fn setup(mut commands: Commands) {
     let moon2_velocity = Vec3::new(-moon2_orbital_speed, 0., 0.); // Tangent to orbit
 
     commands.spawn((
+        Body,
         Radius(moon2_radius),
         Name::new("Moon2"),
         Fill(Color32::GREEN),
         Transform::from_translation(moon2_pos),
-        Mass(0.0), // Will be calculated in assign_masses
         Velocity(moon2_velocity),
-        Crafts(0),
+        // Mass and Crafts will be added with defaults (0.0 and 0)
     ));
 }
 
