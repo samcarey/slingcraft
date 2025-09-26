@@ -3,9 +3,8 @@ use bevy::window::PrimaryWindow;
 use bevy_egui::{
     EguiContexts, EguiPlugin, EguiPrimaryContextPass,
     egui::{
-        self, Align, Align2, CentralPanel, Color32, Frame, InnerResponse, Layout, MenuBar,
-        RichText, Sense, Stroke, TopBottomPanel, Ui, UiBuilder, scroll_area::ScrollAreaOutput,
-        vec2,
+        self, Align, Align2, CentralPanel, Color32, Frame, InnerResponse, MenuBar, RichText, Sense,
+        Stroke, TopBottomPanel, Ui, scroll_area::ScrollAreaOutput, vec2,
     },
 };
 use bevy_persistent::prelude::*;
@@ -544,7 +543,7 @@ fn ui_system(
             }
         }
 
-        let window_size = [250., plot_response.response.rect.height() * 0.4];
+        let window_size = [150., plot_response.response.rect.height() * 0.4];
         let window_response = egui::Window::new("overlay_window")
             .anchor(Align2::LEFT_BOTTOM, [16.0, -16.0])
             .min_size(window_size)
@@ -612,7 +611,7 @@ pub fn framed_list<R>(
         .stroke(ui.style().visuals.window_stroke())
         .corner_radius(3.)
         .inner_margin(5.)
-        .fill(ui.style().visuals.code_bg_color.gamma_multiply(0.3))
+        .fill(ui.style().visuals.code_bg_color.gamma_multiply(0.5))
         .show(ui, |ui| {
             egui::ScrollArea::vertical()
                 .auto_shrink(false)
