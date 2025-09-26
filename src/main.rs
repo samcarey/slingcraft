@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy_egui::{
     EguiContexts, EguiPlugin, EguiPrimaryContextPass,
-    egui::{self, CentralPanel, Color32, MenuBar, Stroke, TopBottomPanel, vec2},
+    egui::{self, Align2, CentralPanel, Color32, MenuBar, Stroke, TopBottomPanel, vec2},
 };
 use bevy_persistent::prelude::*;
 use bevy_persistent_windows::prelude::*;
@@ -22,7 +22,8 @@ fn main() {
         SimpleSubsecondPlugin::default(),
         PersistentWindowsPlugin,
     ))
-    .add_systems(Startup, (setup, spawn_persistent_window))
+    .add_systems(Startup, (setup, spawn_persistent_window).chain())
+    .add_systems(PostStartup, assign_crafts)
     .add_systems(EguiPrimaryContextPass, ui_system)
     .add_systems(
         Update,
@@ -77,6 +78,9 @@ struct Radius(f32);
 #[derive(Component)]
 struct Mass(f32);
 
+#[derive(Component)]
+struct Crafts(u32);
+
 fn setup(mut commands: Commands) {
     const G: f32 = 50.0; // Same G as used in gravity function
 
@@ -96,6 +100,7 @@ fn setup(mut commands: Commands) {
         Transform::from_translation(gliblot_pos),
         Mass(gliblot_mass),
         Velocity(Vec3::ZERO),
+        Crafts(0),
     ));
 
     // Orbiting bodies - positions specified, velocities calculated
@@ -112,6 +117,7 @@ fn setup(mut commands: Commands) {
         Transform::from_translation(moon_pos),
         Mass(moon_mass),
         Velocity(moon_velocity),
+        Crafts(0),
     ));
 
     let moon2_pos = Vec3::new(0., 40., 0.);
@@ -127,7 +133,27 @@ fn setup(mut commands: Commands) {
         Transform::from_translation(moon2_pos),
         Mass(moon2_mass),
         Velocity(moon2_velocity),
+        Crafts(0),
     ));
+}
+
+fn assign_crafts(
+    mut bodies: Query<(&Mass, &mut Crafts)>,
+) {
+    // Find the maximum mass among all bodies
+    let max_mass = bodies
+        .iter()
+        .map(|(mass, _)| mass.0)
+        .fold(0.0_f32, |max, mass| max.max(mass));
+
+    if max_mass <= 0.0 {
+        return;
+    }
+
+    // Assign crafts proportionally to mass (0 to 10 range)
+    for (mass, mut crafts) in bodies.iter_mut() {
+        crafts.0 = ((mass.0 / max_mass) * 10.0).round().max(0.0).min(10.0) as u32;
+    }
 }
 
 fn motion(mut query: Query<(&Velocity, &mut Transform)>, time: Res<Time>) {
@@ -240,7 +266,7 @@ fn calculate_center_of_mass(
 #[hot]
 fn ui_system(
     mut contexts: EguiContexts,
-    bodies: Query<(&Name, &Radius, &Fill, &Transform)>,
+    bodies: Query<(&Name, &Radius, &Fill, &Transform, &Crafts)>,
     potential_energy: Res<PotentialEnergy>,
     kinetic_energy: Res<KineticEnergy>,
     total_energy: Res<TotalEnergy>,
@@ -272,7 +298,7 @@ fn ui_system(
             .show_axes(false)
             .show_x(false)
             .show_y(false)
-            .legend(Legend::default())
+            .legend(Legend::default().hidden_items([].into_iter()))
             // .sense(Sense::all())
             .show(ui, |ui| {
                 for (
@@ -283,6 +309,7 @@ fn ui_system(
                         translation: Vec3 { x, y, .. },
                         ..
                     },
+                    crafts,
                 ) in bodies
                 {
                     ui.polygon(
@@ -299,6 +326,17 @@ fn ui_system(
                         )
                         .fill_color(fill.0.gamma_multiply(0.75))
                         .stroke(Stroke::new(2., fill.0.gamma_multiply(1.2))),
+                    );
+
+                    let offset = (radius.0 / 2f32.sqrt() + 0.1) as f64;
+                    ui.text(
+                        egui_plot::Text::new(
+                            "",
+                            egui_plot::PlotPoint::new(*x as f64 + offset, *y as f64 + offset),
+                            egui::RichText::new(crafts.0.to_string()).size(20.0), // .background_color(Color32::from_black_alpha(180)),
+                        )
+                        .color(Color32::WHITE)
+                        .anchor(Align2::LEFT_BOTTOM),
                     );
                 }
 
