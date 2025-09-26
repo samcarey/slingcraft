@@ -567,9 +567,9 @@ fn ui_system(
                             framed_list(ui, |ui| {
                                 ui.label(format!("Radius: {:.1}", radius.0));
                                 ui.label(format!("Mass: {:.2}", mass.0));
-                                ui.label(format!("Speed: {:.1}", velocity.0.length()));
+                                ui.label(format!("Speed: {:.2}", velocity.0.length()));
                                 let ke = 0.5 * mass.0 * velocity.0.length_squared();
-                                ui.label(format!("Kinetic Energy: {:.1}", ke));
+                                ui.label(format!("Kinetic Energy: {:.2}", ke));
                             });
                         }
                     } else {
