@@ -2,12 +2,12 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy_egui::{
     EguiContexts, EguiPlugin, EguiPrimaryContextPass,
-    egui::{self, Align2, CentralPanel, Color32, MenuBar, Stroke, TopBottomPanel, vec2},
+    egui::{self, Align2, CentralPanel, Color32, MenuBar, Sense, Stroke, TopBottomPanel, vec2},
 };
 use bevy_persistent::prelude::*;
 use bevy_persistent_windows::prelude::*;
 use bevy_simple_subsecond_system::prelude::*;
-use egui_plot::{Legend, Plot};
+use egui_plot::Plot;
 use std::f32::consts::PI;
 
 fn main() {
@@ -25,7 +25,13 @@ fn main() {
     .add_systems(Startup, (setup, spawn_persistent_window).chain())
     .add_systems(
         PostStartup,
-        (assign_masses, recalculate_orbital_velocities, assign_crafts).chain(),
+        (
+            assign_ids,
+            assign_masses,
+            recalculate_orbital_velocities,
+            assign_crafts,
+        )
+            .chain(),
     )
     .add_systems(EguiPrimaryContextPass, ui_system)
     .add_systems(
@@ -88,6 +94,12 @@ struct Mass(f32);
 #[derive(Component, Default)]
 struct Crafts(u32);
 
+#[derive(Component)]
+struct EguiId(egui::Id);
+
+#[derive(Resource, Default)]
+struct HoveredBody(Option<String>);
+
 fn setup(mut commands: Commands) {
     const G: f32 = 50.0; // Same G as used in gravity function
 
@@ -96,6 +108,7 @@ fn setup(mut commands: Commands) {
     commands.insert_resource(KineticEnergy(0.));
     commands.insert_resource(TotalEnergy(0.));
     commands.insert_resource(CenterOfMass(Vec3::ZERO));
+    commands.insert_resource(HoveredBody::default());
 
     // Central body (stationary)
     let gliblot_pos = Vec3::new(0., 0., 0.);
@@ -144,6 +157,15 @@ fn setup(mut commands: Commands) {
         Velocity(moon2_velocity),
         // Mass and Crafts will be added with defaults (0.0 and 0)
     ));
+}
+
+fn assign_ids(mut commands: Commands, bodies: Query<Entity, (With<Body>, Without<EguiId>)>) {
+    for entity in bodies.iter() {
+        // Create a unique egui Id from the entity
+        commands
+            .entity(entity)
+            .insert(EguiId(egui::Id::new(entity)));
+    }
 }
 
 fn assign_masses(mut bodies: Query<(&Radius, &mut Mass)>) {
@@ -323,11 +345,12 @@ fn calculate_center_of_mass(
 #[hot]
 fn ui_system(
     mut contexts: EguiContexts,
-    bodies: Query<(&Name, &Radius, &Fill, &Transform, &Crafts)>,
+    bodies: Query<(&Name, &Radius, &Fill, &Transform, &Crafts, Option<&EguiId>)>,
     potential_energy: Res<PotentialEnergy>,
     kinetic_energy: Res<KineticEnergy>,
     total_energy: Res<TotalEnergy>,
     cm: Res<CenterOfMass>,
+    mut hovered_body: ResMut<HoveredBody>,
 ) {
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
@@ -355,8 +378,8 @@ fn ui_system(
             .show_axes(false)
             .show_x(false)
             .show_y(false)
-            .legend(Legend::default().hidden_items([].into_iter()))
-            // .sense(Sense::all())
+            // .legend(Legend::default().hidden_items([].into_iter()))
+            .sense(Sense::all())
             .show(ui, |ui| {
                 for (
                     name,
@@ -367,22 +390,30 @@ fn ui_system(
                         ..
                     },
                     crafts,
+                    egui_id,
                 ) in bodies
                 {
+                    // Use entity-based ID as the polygon identifier string
+                    let polygon_id = egui_id
+                        .map(|id| format!("body_{:?}", id.0))
+                        .unwrap_or_else(|| name.to_string());
+
+                    // Create the circle points for the body
+                    let body_points: Vec<_> = (0..90)
+                        .into_iter()
+                        .map(|i| i * 4)
+                        .map(|i| i as f32 * PI / 180.)
+                        .map(|d| [radius.0 * d.cos(), radius.0 * d.sin()])
+                        .map(|[x_edge, y_edge]| [x + x_edge, y + y_edge])
+                        .map(|[x, y]| [x as f64, y as f64])
+                        .collect();
+
+                    // Draw the main body polygon
                     ui.polygon(
-                        egui_plot::Polygon::new(
-                            name,
-                            (0..90)
-                                .into_iter()
-                                .map(|i| i * 4)
-                                .map(|i| i as f32 * PI / 180.)
-                                .map(|d| [radius.0 * d.cos(), radius.0 * d.sin()])
-                                .map(|[x_edge, y_edge]| [x + x_edge, y + y_edge])
-                                .map(|[x, y]| [x as f64, y as f64])
-                                .collect::<Vec<_>>(),
-                        )
-                        .fill_color(fill.0.gamma_multiply(0.75))
-                        .stroke(Stroke::new(2., fill.0.gamma_multiply(1.2))),
+                        egui_plot::Polygon::new(polygon_id.clone(), body_points.clone())
+                            .name(name)
+                            .fill_color(fill.0.gamma_multiply(0.75))
+                            .stroke(Stroke::new(2., fill.0.gamma_multiply(1.2))),
                     );
 
                     let offset = (radius.0 / 2f32.sqrt() + 0.1) as f64;
@@ -400,14 +431,101 @@ fn ui_system(
                 ui.points(
                     egui_plot::Points::new("Center Mass", [cm.0.x as f64, cm.0.y as f64])
                         .color(Color32::WHITE)
-                        .radius(2.),
+                        .radius(3.),
                 );
             });
-        if plot_response.response.clicked() {
-            println!("hi");
+
+        // Check for hover using geometric detection
+        let mut new_hovered_body: Option<String> = None;
+
+        if let Some(pointer_pos) = plot_response.response.hover_pos() {
+            // Convert screen coordinates to plot coordinates
+            let plot_pos = plot_response.transform.value_from_position(pointer_pos);
+            // Check which body (if any) the pointer is over
+            for (name, radius, _fill, transform, _crafts, _egui_id) in bodies.iter() {
+                let body_center = [
+                    transform.translation.x as f64,
+                    transform.translation.y as f64,
+                ];
+                let distance = ((plot_pos.x - body_center[0]).powi(2)
+                    + (plot_pos.y - body_center[1]).powi(2))
+                .sqrt();
+
+                if distance <= radius.0 as f64 {
+                    new_hovered_body = Some(name.to_string());
+                    break; // Take the first body we find (in case of overlap)
+                }
+            }
         }
-        if let Some(id) = plot_response.hovered_plot_item {
-            println!("{id:?}");
+
+        // Update hover state for next frame
+        hovered_body.0 = new_hovered_body;
+
+        // Draw hover outline in overlay if a body is hovered
+        if let Some(hovered_name) = &hovered_body.0 {
+            // Find the hovered body to get its position and radius
+            if let Some((_, radius, _, transform, _, _)) = bodies
+                .iter()
+                .find(|(name, _, _, _, _, _)| &name.to_string() == hovered_name)
+            {
+                let body_center = [
+                    transform.translation.x as f64,
+                    transform.translation.y as f64,
+                ];
+                let hover_radius = radius.0 as f64 + 0.5; // Just slightly larger
+
+                // Convert body center from plot coordinates to screen coordinates
+                let center_screen =
+                    plot_response
+                        .transform
+                        .position_from_point(&egui_plot::PlotPoint::new(
+                            body_center[0],
+                            body_center[1],
+                        ));
+
+                // Calculate the radius in screen space by checking a point on the edge
+                let edge_point =
+                    egui_plot::PlotPoint::new(body_center[0] + hover_radius, body_center[1]);
+                let edge_screen = plot_response.transform.position_from_point(&edge_point);
+                let screen_radius = (edge_screen.x - center_screen.x).abs();
+
+                // Draw circle outline on the main UI
+                let painter = ui.painter();
+                painter.circle_stroke(
+                    center_screen,
+                    screen_radius,
+                    Stroke::new(3.0, Color32::WHITE),
+                );
+            }
         }
+
+        // Add overlay card in lower left corner with margins
+        let margin = 8.0;
+
+        // Create a smaller rect with margins
+        let card_rect = plot_response.response.rect.shrink(margin);
+        let card_rect = card_rect
+            .with_max_x(card_rect.right() + 600.)
+            .with_min_y(card_rect.bottom() - 600.);
+
+        let mut ui = ui.new_child(egui::UiBuilder::new().max_rect(card_rect));
+        ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+            let hovered_name = hovered_body.0.clone();
+
+            // Show card with hovered body name or default text
+            egui::Frame::new()
+                .fill(Color32::from_black_alpha(200))
+                .corner_radius(8.0)
+                .stroke(ui.style().visuals.window_stroke())
+                .inner_margin(egui::Margin::same(12))
+                .show(ui, |ui| {
+                    ui.visuals_mut().override_text_color = Some(Color32::WHITE);
+                    if let Some(name) = hovered_name {
+                        ui.label(format!("Hovered: {}", name));
+                    } else {
+                        ui.label("SlingCraft v0.1.0\nOrbital Mechanics Simulator");
+                    }
+                });
+        });
     });
 }
