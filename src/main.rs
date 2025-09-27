@@ -4,7 +4,7 @@ use bevy_egui::{
     EguiContexts, EguiPlugin, EguiPrimaryContextPass,
     egui::{
         self, Align, Align2, CentralPanel, Color32, Frame, InnerResponse, Layout, MenuBar,
-        RichText, Sense, Stroke, TopBottomPanel, Ui, scroll_area::ScrollAreaOutput, vec2,
+        RichText, Sense, Stroke, TopBottomPanel, Ui, vec2,
     },
 };
 use bevy_persistent::prelude::*;
