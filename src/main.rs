@@ -356,13 +356,13 @@ fn calculate_center_of_mass(
 #[hot]
 fn ui_system(
     mut contexts: EguiContexts,
-    bodies: Query<(
+    mut bodies: Query<(
         &Name,
         &Radius,
         &Fill,
         &Transform,
-        &Crafts,
-        &Mass,
+        &mut Crafts,
+        &mut Mass,
         &Velocity,
         Option<&EguiId>,
     )>,
@@ -405,7 +405,6 @@ fn ui_system(
             .show_axes(false)
             .show_x(false)
             .show_y(false)
-            // .legend(Legend::default().hidden_items([].into_iter()))
             .sense(Sense::all())
             .show(ui, |ui| {
                 for (
@@ -420,7 +419,7 @@ fn ui_system(
                     _mass,
                     _velocity,
                     egui_id,
-                ) in bodies
+                ) in bodies.iter()
                 {
                     // Use entity-based ID as the polygon identifier string
                     let polygon_id = egui_id
@@ -559,8 +558,8 @@ fn ui_system(
                     ui.visuals_mut().override_text_color = Some(Color32::WHITE);
 
                     if let Some(selected_name) = &selected_body.0 {
-                        if let Some((name, radius, fill, _, crafts, mass, velocity, _)) = bodies
-                            .iter()
+                        if let Some((name, radius, fill, _, mut crafts, mass, velocity, _)) = bodies
+                            .iter_mut()
                             .find(|(n, _, _, _, _, _, _, _)| &n.to_string() == selected_name)
                         {
                             ui.heading(RichText::new(name.to_string()).color(fill.0));
@@ -570,25 +569,56 @@ fn ui_system(
                                 ui.label(format!("Speed: {:.2}", velocity.0.length()));
                                 let ke = 0.5 * mass.0 * velocity.0.length_squared();
                                 ui.label(format!("Kinetic Energy: {:.2}", ke));
+                                ui.with_layout(Layout::left_to_right(Align::Max), |ui| {
+                                    if ui.button("➖").clicked() {
+                                        if let Some(new) = crafts.0.checked_sub(1) {
+                                            crafts.0 = new;
+                                        }
+                                    }
+                                    ui.with_layout(Layout::right_to_left(Align::Max), |ui| {
+                                        if ui.button("➕").clicked() {
+                                            if let Some(new) = crafts.0.checked_add(1) {
+                                                crafts.0 = new;
+                                            }
+                                        }
+                                    });
+                                });
                             });
                         }
                     } else {
                         ui.heading("Bodies");
                         framed_list(ui, |ui| {
-                            for (name, _radius, fill, _transform, _crafts, _mass, _velocity, _) in
-                                bodies.iter()
-                            {
-                                ui.horizontal(|ui| {
-                                    let color_response = ui.colored_label(fill.0, "⏺");
-                                    ui.with_layout(Layout::top_down_justified(Align::Min), |ui| {
-                                        let name_response =
-                                            ui.selectable_label(false, &name.to_string());
-                                        if color_response.clicked() || name_response.clicked() {
-                                            selected_body.0 = Some(name.to_string());
-                                        }
-                                    });
+                            egui::ScrollArea::vertical()
+                                .auto_shrink(false)
+                                .show(ui, |ui| {
+                                    for (
+                                        name,
+                                        _radius,
+                                        fill,
+                                        _transform,
+                                        _crafts,
+                                        _mass,
+                                        _velocity,
+                                        _,
+                                    ) in bodies.iter()
+                                    {
+                                        ui.horizontal(|ui| {
+                                            let color_response = ui.colored_label(fill.0, "⏺");
+                                            ui.with_layout(
+                                                Layout::top_down_justified(Align::Min),
+                                                |ui| {
+                                                    let name_response = ui
+                                                        .selectable_label(false, &name.to_string());
+                                                    if color_response.clicked()
+                                                        || name_response.clicked()
+                                                    {
+                                                        selected_body.0 = Some(name.to_string());
+                                                    }
+                                                },
+                                            );
+                                        });
+                                    }
                                 });
-                            }
                         });
                     }
                 });
@@ -605,18 +635,11 @@ fn ui_system(
     });
 }
 
-pub fn framed_list<R>(
-    ui: &mut Ui,
-    add_contents: impl FnOnce(&mut Ui) -> R,
-) -> InnerResponse<ScrollAreaOutput<R>> {
+pub fn framed_list<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
     Frame::new()
         .stroke(ui.style().visuals.window_stroke())
         .corner_radius(3.)
         .inner_margin(5.)
         .fill(ui.style().visuals.code_bg_color.gamma_multiply(0.5))
-        .show(ui, |ui| {
-            egui::ScrollArea::vertical()
-                .auto_shrink(false)
-                .show(ui, add_contents)
-        })
+        .show(ui, add_contents)
 }
