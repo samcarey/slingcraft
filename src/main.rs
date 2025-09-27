@@ -3,8 +3,8 @@ use bevy::window::PrimaryWindow;
 use bevy_egui::{
     EguiContexts, EguiPlugin, EguiPrimaryContextPass,
     egui::{
-        self, Align, Align2, CentralPanel, Color32, Frame, InnerResponse, Layout, MenuBar,
-        RichText, Sense, Stroke, TopBottomPanel, Ui, vec2,
+        self, Align, Align2, Button, CentralPanel, Color32, Direction, Frame, InnerResponse,
+        Layout, MenuBar, RichText, Sense, Stroke, TopBottomPanel, Ui, vec2,
     },
 };
 use bevy_persistent::prelude::*;
@@ -562,8 +562,16 @@ fn ui_system(
                             .iter_mut()
                             .find(|(n, _, _, _, _, _, _, _)| &n.to_string() == selected_name)
                         {
-                            ui.heading(RichText::new(name.to_string()).color(fill.0));
-                            framed_list(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .add(Button::new("⮪").frame_when_inactive(false))
+                                    .clicked()
+                                {
+                                    selected_body.0 = None;
+                                }
+                                ui.heading(RichText::new(name.to_string()));
+                            });
+                            framed_list(ui, Some(fill.0), |ui| {
                                 ui.label(format!("Radius: {:.1}", radius.0));
                                 ui.label(format!("Mass: {:.2}", mass.0));
                                 ui.label(format!("Speed: {:.2}", velocity.0.length()));
@@ -581,13 +589,20 @@ fn ui_system(
                                                 crafts.0 = new;
                                             }
                                         }
+                                        ui.with_layout(
+                                            Layout::centered_and_justified(Direction::BottomUp)
+                                                .with_main_justify(false),
+                                            |ui| {
+                                                ui.label(format!("{}", crafts.0));
+                                            },
+                                        );
                                     });
                                 });
                             });
                         }
                     } else {
                         ui.heading("Bodies");
-                        framed_list(ui, |ui| {
+                        framed_list(ui, None, |ui| {
                             egui::ScrollArea::vertical()
                                 .auto_shrink(false)
                                 .show(ui, |ui| {
@@ -635,10 +650,17 @@ fn ui_system(
     });
 }
 
-pub fn framed_list<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
+pub fn framed_list<R>(
+    ui: &mut Ui,
+    color: Option<Color32>,
+    add_contents: impl FnOnce(&mut Ui) -> R,
+) -> InnerResponse<R> {
     Frame::new()
-        .stroke(ui.style().visuals.window_stroke())
-        .corner_radius(3.)
+        .stroke(Stroke::new(
+            1.5,
+            color.unwrap_or(ui.style().visuals.window_stroke().color),
+        ))
+        .corner_radius(5.)
         .inner_margin(5.)
         .fill(ui.style().visuals.code_bg_color.gamma_multiply(0.5))
         .show(ui, add_contents)
