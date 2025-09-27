@@ -3,8 +3,8 @@ use bevy::window::PrimaryWindow;
 use bevy_egui::{
     EguiContexts, EguiPlugin, EguiPrimaryContextPass,
     egui::{
-        self, Align, Align2, CentralPanel, Color32, Frame, InnerResponse, MenuBar, RichText, Sense,
-        Stroke, TopBottomPanel, Ui, scroll_area::ScrollAreaOutput, vec2,
+        self, Align, Align2, CentralPanel, Color32, Frame, InnerResponse, Layout, MenuBar,
+        RichText, Sense, Stroke, TopBottomPanel, Ui, scroll_area::ScrollAreaOutput, vec2,
     },
 };
 use bevy_persistent::prelude::*;
@@ -580,11 +580,13 @@ fn ui_system(
                             {
                                 ui.horizontal(|ui| {
                                     let color_response = ui.colored_label(fill.0, "⏺");
-                                    let name_response =
-                                        ui.selectable_label(false, &name.to_string());
-                                    if color_response.clicked() || name_response.clicked() {
-                                        selected_body.0 = Some(name.to_string());
-                                    }
+                                    ui.with_layout(Layout::top_down_justified(Align::Min), |ui| {
+                                        let name_response =
+                                            ui.selectable_label(false, &name.to_string());
+                                        if color_response.clicked() || name_response.clicked() {
+                                            selected_body.0 = Some(name.to_string());
+                                        }
+                                    });
                                 });
                             }
                         });
