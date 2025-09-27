@@ -4,7 +4,7 @@ use bevy_egui::{
     EguiContexts, EguiPlugin, EguiPrimaryContextPass,
     egui::{
         self, Align, Align2, Button, CentralPanel, Color32, Direction, Frame, InnerResponse,
-        Layout, MenuBar, RichText, Sense, Stroke, TopBottomPanel, Ui, vec2,
+        Layout, RichText, Sense, Stroke, Ui, vec2,
     },
 };
 use bevy_persistent::prelude::*;
@@ -383,17 +383,7 @@ fn ui_system(
         selected_body.0 = None;
     }
 
-    TopBottomPanel::top("top_panel").show(ctx, |ui| {
-        MenuBar::new().ui(ui, |ui| {
-            egui::widgets::global_theme_preference_buttons(ui);
-        });
-    });
-
     CentralPanel::default().show(ctx, |ui| {
-        ui.label(format!(
-            "PE: {:.03}, KE: {:.03}, Total: {:.03}",
-            potential_energy.0, kinetic_energy.0, total_energy.0
-        ));
         let plot_response = Plot::new("space_plot")
             .data_aspect(1.)
             .allow_axis_zoom_drag(false)
@@ -541,6 +531,38 @@ fn ui_system(
                 );
             }
         }
+
+        // Energy overlay at top center
+        egui::Window::new("energy_overlay")
+            .anchor(Align2::LEFT_TOP, [8.0, 8.0])
+            .title_bar(false)
+            .resizable(false)
+            .frame(
+                Frame::window(&ctx.style())
+                    .fill(Color32::TRANSPARENT)
+                    .stroke(Stroke::NONE),
+            )
+            .show(ui.ctx(), |ui| {
+                ui.visuals_mut().override_text_color = Some(Color32::WHITE);
+                ui.label(format!(
+                    "PE: {:.03}, KE: {:.03}, Total: {:.03}",
+                    potential_energy.0, kinetic_energy.0, total_energy.0
+                ));
+            });
+
+        // Theme buttons overlay at top right
+        egui::Window::new("theme_overlay")
+            .anchor(Align2::RIGHT_TOP, [-8.0, 8.0])
+            .title_bar(false)
+            .resizable(false)
+            .frame(
+                Frame::window(&ctx.style())
+                    .fill(Color32::TRANSPARENT)
+                    .stroke(Stroke::NONE),
+            )
+            .show(ui.ctx(), |ui| {
+                egui::widgets::global_theme_preference_switch(ui);
+            });
 
         let window_size = [150., plot_response.response.rect.height() * 0.4];
         let window_response = egui::Window::new("overlay_window")
