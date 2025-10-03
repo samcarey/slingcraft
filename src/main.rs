@@ -11,7 +11,17 @@ use bevy_persistent::prelude::*;
 use bevy_persistent_windows::prelude::*;
 use bevy_simple_subsecond_system::prelude::*;
 use egui_plot::Plot;
+use lightyear::prelude::input::native::{ActionState, InputMarker};
 use std::f32::consts::PI;
+
+mod client;
+mod protocol;
+mod server;
+mod shared;
+
+use protocol::{Body, Crafts, Fill, Mass, ProtocolPlugin, Radius, Velocity};
+
+use crate::protocol::Inputs;
 
 fn main() {
     let mut app = App::new();
@@ -24,7 +34,13 @@ fn main() {
         EguiPlugin::default(),
         SimpleSubsecondPlugin::default(),
         PersistentWindowsPlugin,
+        ProtocolPlugin,
     ))
+    .add_systems(
+        FixedPreUpdate,
+        // Inputs have to be buffered in the WriteClientInputs set
+        buffer_input.in_set(InputSet::WriteClientInputs),
+    )
     .add_systems(Startup, (setup, spawn_persistent_window).chain())
     .add_systems(
         PostStartup,
@@ -49,6 +65,41 @@ fn main() {
     }
 
     app.run();
+}
+
+/// System that reads from peripherals and adds inputs to the buffer
+/// This system must be run in the `InputSystemSet::BufferInputs` set in the `FixedPreUpdate` schedule
+/// to work correctly.
+///
+/// I would also advise to use the `leafwing` feature to use the `LeafwingInputPlugin` instead of the
+/// `InputPlugin`, which contains more features.
+pub(crate) fn buffer_input(
+    mut query: Query<&mut ActionState<Inputs>, With<InputMarker<Inputs>>>,
+    keypress: Res<ButtonInput<KeyCode>>,
+) {
+    if let Ok(mut action_state) = query.single_mut() {
+        let mut direction = Direction {
+            up: false,
+            down: false,
+            left: false,
+            right: false,
+        };
+        if keypress.pressed(KeyCode::KeyW) || keypress.pressed(KeyCode::ArrowUp) {
+            direction.up = true;
+        }
+        if keypress.pressed(KeyCode::KeyS) || keypress.pressed(KeyCode::ArrowDown) {
+            direction.down = true;
+        }
+        if keypress.pressed(KeyCode::KeyA) || keypress.pressed(KeyCode::ArrowLeft) {
+            direction.left = true;
+        }
+        if keypress.pressed(KeyCode::KeyD) || keypress.pressed(KeyCode::ArrowRight) {
+            direction.right = true;
+        }
+        // we always set the value. Setting it to None means that the input was missing, it's not the same
+        // as saying that the input was 'no keys pressed'
+        action_state.0 = Inputs::Direction(direction);
+    }
 }
 
 fn spawn_persistent_window(mut commands: Commands) {
@@ -77,25 +128,6 @@ fn spawn_persistent_window(mut commands: Commands) {
         },
     ));
 }
-
-#[derive(Component)]
-struct Fill(Color32);
-
-#[derive(Component)]
-struct Velocity(Vec3);
-
-#[derive(Component)]
-struct Radius(f32);
-
-#[derive(Component)]
-#[require(Mass, Crafts)]
-struct Body;
-
-#[derive(Component, Default)]
-struct Mass(f32);
-
-#[derive(Component, Default)]
-struct Crafts(u32);
 
 #[derive(Component)]
 struct EguiId(egui::Id);

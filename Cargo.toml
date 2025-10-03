@@ -20,14 +20,25 @@ bevy = { version = "0.16", default-features = false, features = [
     "wayland",
     "webgl2",             # Use WebGL2 instead of WebGPU for web compatibility
     "png",
+    "bevy_state",
 ] }
 bevy_egui = "0.36"
 bevy_simple_subsecond_system = "0.2.0"
-egui_plot = "0.33"
+egui_plot = { version = "0.33", features = ["serde"] }
 log = "0.4.27"
 serde = { version = "1.0.219", features = ["derive"] }
 bevy-persistent = { version = "0.8", features = ["all"] }
 bevy-persistent-windows = "0.8"
+lightyear = { version = "0.24", features = [
+    "interpolation",
+    "prediction",
+    "replication",
+    "input_native",
+] }
+clap = { version = "4.5.4", features = ["derive"] }
+cfg-if = "1.0"
+
+common = { path = "common" }
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
