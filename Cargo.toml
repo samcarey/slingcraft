@@ -22,23 +22,23 @@ bevy = { version = "0.16", default-features = false, features = [
     "png",
 ] }
 bevy_egui = "0.36"
-bevy_simple_subsecond_system = "0.2.0"
+bevy_simple_subsecond_system = "0.2"
 egui_plot = "0.33"
-log = "0.4.27"
-serde = { version = "1.0.219", features = ["derive"] }
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
 bevy-persistent = { version = "0.8", features = ["all"] }
 bevy-persistent-windows = "0.8"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11.8"
-dirs = "5.0"
+dirs = "6.0"
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
-web-sys = "0.3.70"
-console_error_panic_hook = "0.1.7"
+web-sys = "0.3"
+console_error_panic_hook = "0.1"
 # getrandom = { version = "0.2", features = ["js"] }
 # # Force getrandom 0.3 to use wasm_js feature
 # getrandom03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
