@@ -52,10 +52,14 @@ fn main() {
 }
 
 fn spawn_persistent_window(mut commands: Commands) {
+    #[cfg(not(target_arch = "wasm32"))]
     let state_directory = dirs::data_dir()
         .unwrap_or_else(|| std::env::current_dir().unwrap())
         .join("slingcraft")
         .join("state");
+
+    #[cfg(target_arch = "wasm32")]
+    let state_directory = std::path::PathBuf::from("slingcraft/state");
 
     commands.spawn((
         PrimaryWindow,
