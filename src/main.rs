@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use bevy::render::{RenderPlugin, settings::{WgpuSettings, Backends}};
 use bevy_egui::{
     EguiContexts, EguiPlugin, EguiPrimaryContextPass,
     egui::{
@@ -17,10 +18,18 @@ fn main() {
     let mut app = App::new();
 
     app.add_plugins((
-        DefaultPlugins.set(WindowPlugin {
-            primary_window: None,
-            ..default()
-        }),
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: None,
+                ..default()
+            })
+            .set(RenderPlugin {
+                render_creation: bevy::render::settings::RenderCreation::Automatic(WgpuSettings {
+                    backends: Some(Backends::GL),
+                    ..default()
+                }),
+                ..default()
+            }),
         EguiPlugin::default(),
         SimpleSubsecondPlugin::default(),
         PersistentWindowsPlugin,
