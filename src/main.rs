@@ -17,19 +17,29 @@ use std::f32::consts::PI;
 fn main() {
     let mut app = App::new();
 
-    app.add_plugins((
-        DefaultPlugins
-            .set(WindowPlugin {
-                primary_window: None,
-                ..default()
-            })
-            .set(RenderPlugin {
-                render_creation: bevy::render::settings::RenderCreation::Automatic(WgpuSettings {
-                    backends: Some(Backends::GL),
-                    ..default()
-                }),
+    #[cfg(target_arch = "wasm32")]
+    let default_plugins = DefaultPlugins
+        .set(WindowPlugin {
+            primary_window: None,
+            ..default()
+        })
+        .set(RenderPlugin {
+            render_creation: bevy::render::settings::RenderCreation::Automatic(WgpuSettings {
+                backends: Some(Backends::GL),
+                power_preference: bevy::render::settings::PowerPreference::LowPower,
                 ..default()
             }),
+            ..default()
+        });
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let default_plugins = DefaultPlugins.set(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+
+    app.add_plugins((
+        default_plugins,
         EguiPlugin::default(),
         SimpleSubsecondPlugin::default(),
         PersistentWindowsPlugin,
