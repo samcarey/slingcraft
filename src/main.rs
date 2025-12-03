@@ -26,7 +26,7 @@ fn main() {
         .set(RenderPlugin {
             render_creation: bevy::render::settings::RenderCreation::Automatic(WgpuSettings {
                 backends: Some(Backends::GL),
-                power_preference: bevy::render::settings::PowerPreference::LowPower,
+                limits: bevy::render::settings::WgpuLimits::downlevel_webgl2_defaults(),
                 ..default()
             }),
             ..default()
