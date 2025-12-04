@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use bevy::render::{RenderPlugin, settings::{WgpuSettings, Backends}};
 use bevy_egui::{
     EguiContexts, EguiPlugin, EguiPrimaryContextPass,
     egui::{
@@ -17,34 +16,40 @@ use std::f32::consts::PI;
 fn main() {
     let mut app = App::new();
 
-    #[cfg(target_arch = "wasm32")]
-    let default_plugins = DefaultPlugins
-        .set(WindowPlugin {
-            primary_window: None,
-            ..default()
-        })
-        .set(RenderPlugin {
-            render_creation: bevy::render::settings::RenderCreation::Automatic(WgpuSettings {
-                backends: Some(Backends::GL),
-                limits: bevy::render::settings::WgpuLimits::downlevel_webgl2_defaults(),
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        app.add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: None,
                 ..default()
             }),
-            ..default()
-        });
+            EguiPlugin::default(),
+            SimpleSubsecondPlugin::default(),
+            PersistentWindowsPlugin,
+        ))
+        .add_systems(Startup, (setup, spawn_persistent_window).chain());
+    }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    let default_plugins = DefaultPlugins.set(WindowPlugin {
-        primary_window: None,
-        ..default()
-    });
+    #[cfg(target_arch = "wasm32")]
+    {
+        app.add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "SlingCraft".to_string(),
+                    canvas: Some("#bevy".to_string()),
+                    prevent_default_event_handling: false,
+                    fit_canvas_to_parent: true,
+                    ..default()
+                }),
+                ..default()
+            }),
+            EguiPlugin::default(),
+            SimpleSubsecondPlugin::default(),
+        ))
+        .add_systems(Startup, setup);
+    }
 
-    app.add_plugins((
-        default_plugins,
-        EguiPlugin::default(),
-        SimpleSubsecondPlugin::default(),
-        PersistentWindowsPlugin,
-    ))
-    .add_systems(Startup, (setup, spawn_persistent_window).chain())
+    app
     .add_systems(
         PostStartup,
         (
